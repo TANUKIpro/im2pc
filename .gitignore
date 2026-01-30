@@ -1,0 +1,49 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.egg-info/
+*.egg
+dist/
+build/
+*.so
+
+# Virtual Environment
+.venv/
+venv/
+env/
+
+# PyTorch Model Checkpoints
+*.pt
+*.pth
+*.ckpt
+*.safetensors
+
+# Data & Outputs
+data/
+outputs/
+logs/
+*.ply
+
+# Docker environment (secrets/local paths)
+docker/.env
+
+# IDE & OS
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# Serena (IDE tooling)
+.serena/
+
+# Claude Code local settings
+.claude/settings.local.json
+
+# Models (downloaded at runtime)
+models/pi3x/*.pt
+models/pi3x/*.pth
+models/sam2/*.pt
+models/sam2/*.pth

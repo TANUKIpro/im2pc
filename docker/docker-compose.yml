@@ -1,0 +1,48 @@
+# Pi3X + SAM2 Docker Compose Configuration
+#
+# This runs the Gradio UI in a container.
+# The inference server runs on the host machine for GPU access.
+#
+# Usage:
+#   1. Start host inference server: python host/inference_server.py
+#   2. Start Docker UI: docker-compose up --build
+#   3. Open http://localhost:7860
+
+services:
+  ui:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: pi3x-ui
+    ports:
+      - "7860:7860"
+    volumes:
+      # Mount app code to /app (read-only)
+      - ../app:/app:ro
+      # Mount data to /data (outside /app to avoid read-only conflict)
+      - ../data:/data:ro
+      # Mount output directory for PLY files (read-write)
+      - ../data/output:/data/output:rw
+    environment:
+      # Python unbuffered output for debugging
+      - PYTHONUNBUFFERED=1
+      # Connect to host inference server
+      - INFERENCE_SERVER_URL=http://host.docker.internal:5050
+      - GRADIO_SERVER_NAME=0.0.0.0
+      - GRADIO_SERVER_PORT=7860
+      # Data directory location (container path)
+      - DATA_DIR=/data
+      # Host-side data directory for path conversion
+      # The inference server runs on host, so it needs host paths
+      # Set this in .env file (copy from .env.example)
+      - HOST_DATA_DIR=${HOST_DATA_DIR:-}
+    extra_hosts:
+      # Allow container to access host network (for macOS/Windows Docker)
+      - "host.docker.internal:host-gateway"
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "python", "-c", "import requests; requests.get('http://localhost:7860')"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s

@@ -1,0 +1,15 @@
+# Docker container requirements (UI only)
+
+# Gradio UI
+gradio>=4.0.0
+
+# Image/Video processing
+opencv-python-headless>=4.8.0
+numpy>=1.24.0
+pillow>=10.0.0
+
+# HTTP client
+requests>=2.31.0
+
+# Point cloud handling (for download)
+plyfile>=1.0.0

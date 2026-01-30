@@ -1,0 +1,6 @@
+[submodule "repos/pi3"]
+	path = repos/pi3
+	url = https://github.com/yyfz/Pi3.git
+[submodule "repos/sam2"]
+	path = repos/sam2
+	url = https://github.com/facebookresearch/sam2.git

@@ -1,0 +1,23 @@
+# Host-side requirements for GPU inference (MPS)
+# Run in venv environment on macOS
+
+# Core ML
+torch>=2.0.0
+torchvision>=0.15.0
+
+# Flask API server
+flask>=3.0.0
+flask-cors>=4.0.0
+
+# Image/Video processing
+opencv-python>=4.8.0
+pillow>=10.0.0
+numpy>=1.24.0
+
+# Point cloud export
+plyfile>=1.0.0
+
+# Utilities
+tqdm>=4.65.0
+einops>=0.7.0
+timm>=0.9.0
