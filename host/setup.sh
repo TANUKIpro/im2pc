@@ -37,30 +37,11 @@ echo "Python path: $(which python)"
 # Upgrade pip
 pip install --upgrade pip
 
-# Clone external repositories
+# Initialize git submodules (repos/pi3, repos/sam2)
 echo ""
-echo "[3/5] Setting up external repositories..."
-mkdir -p "$PROJECT_ROOT/repos"
-
-# SAM2
-if [ ! -d "$PROJECT_ROOT/repos/sam2" ]; then
-    echo "Cloning SAM2..."
-    git clone https://github.com/facebookresearch/sam2.git "$PROJECT_ROOT/repos/sam2"
-else
-    echo "SAM2 already cloned, pulling latest..."
-    cd "$PROJECT_ROOT/repos/sam2" && git pull
-fi
-
-# Pi3
-if [ ! -d "$PROJECT_ROOT/repos/pi3" ]; then
-    echo "Cloning Pi3..."
-    git clone https://github.com/yyfz/Pi3.git "$PROJECT_ROOT/repos/pi3"
-else
-    echo "Pi3 already cloned, pulling latest..."
-    cd "$PROJECT_ROOT/repos/pi3" && git pull
-fi
-
+echo "[3/5] Initializing git submodules..."
 cd "$PROJECT_ROOT"
+git submodule update --init --recursive
 
 # Install dependencies
 echo ""
