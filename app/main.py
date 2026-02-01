@@ -83,6 +83,11 @@ def get_video_list():
     return []
 
 
+def on_video_select_event(evt: gr.SelectData):
+    """Wrapper for .select() event which receives gr.SelectData."""
+    return on_video_select(evt.value)
+
+
 def on_video_select(video_path: str):
     """Handle video selection."""
     if not video_path:
@@ -299,8 +304,10 @@ def create_ui():
         with gr.Row():
             with gr.Column(scale=2):
                 # Video selection
+                video_list = get_video_list()
                 video_dropdown = gr.Dropdown(
-                    choices=get_video_list(),
+                    choices=video_list,
+                    value=video_list[0] if video_list else None,
                     label="Select Video",
                     interactive=True
                 )
@@ -389,9 +396,17 @@ def create_ui():
                 )
 
         # Event handlers
+        def refresh_video_list():
+            videos = get_video_list()
+            return gr.Dropdown(choices=videos, value=videos[0] if videos else None)
+
         refresh_btn.click(
-            fn=lambda: gr.Dropdown(choices=get_video_list()),
+            fn=refresh_video_list,
             outputs=video_dropdown
+        ).then(
+            fn=on_video_select,
+            inputs=video_dropdown,
+            outputs=[image_display, status_text, video_info]
         )
 
         refresh_status_btn.click(
@@ -399,9 +414,8 @@ def create_ui():
             outputs=server_status
         )
 
-        video_dropdown.change(
-            fn=on_video_select,
-            inputs=video_dropdown,
+        video_dropdown.select(
+            fn=on_video_select_event,
             outputs=[image_display, status_text, video_info]
         )
 
@@ -437,6 +451,12 @@ def create_ui():
             fn=run_reconstruction,
             inputs=[recon_frame_interval, confidence_threshold],
             outputs=[ply_file, recon_status]
+        )
+
+        demo.load(
+            fn=on_video_select,
+            inputs=video_dropdown,
+            outputs=[image_display, status_text, video_info]
         )
 
     return demo
