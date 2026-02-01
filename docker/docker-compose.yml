@@ -14,6 +14,8 @@ services:
       context: .
       dockerfile: Dockerfile
     container_name: im2pc-ui
+    env_file:
+      - .env
     ports:
       - "7860:7860"
     volumes:
@@ -32,10 +34,7 @@ services:
       - GRADIO_SERVER_PORT=7860
       # Data directory location (container path)
       - DATA_DIR=/data
-      # Host-side data directory for path conversion
-      # The inference server runs on host, so it needs host paths
-      # Set this in .env file (copy from .env.example)
-      - HOST_DATA_DIR=${HOST_DATA_DIR:-}
+      # HOST_DATA_DIR is loaded from .env via env_file directive above
     extra_hosts:
       # Allow container to access host network (for macOS/Windows Docker)
       - "host.docker.internal:host-gateway"

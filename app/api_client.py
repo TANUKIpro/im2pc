@@ -55,12 +55,15 @@ class InferenceClient:
         If HOST_DATA_DIR is not set, the path is returned unchanged.
         """
         if not self.host_data_dir:
+            print(f"[api_client] WARNING: HOST_DATA_DIR is not set, path unchanged: {container_path}")
             return container_path
 
         # Ensure we match at directory boundary (e.g., /data/ or /data exactly)
         prefix = self.container_data_dir.rstrip('/')
         if container_path == prefix or container_path.startswith(prefix + '/'):
-            return container_path.replace(prefix, self.host_data_dir.rstrip('/'), 1)
+            result = container_path.replace(prefix, self.host_data_dir.rstrip('/'), 1)
+            print(f"[api_client] Path converted: {container_path} -> {result}")
+            return result
         return container_path
 
     def health_check(self) -> dict:
