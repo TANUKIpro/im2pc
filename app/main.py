@@ -309,7 +309,7 @@ def create_ui():
                 # Image display for clicks
                 image_display = gr.Image(
                     label="First Frame (Click to add points)",
-                    interactive=True,
+                    interactive=False,
                     type="numpy"
                 )
 

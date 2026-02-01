@@ -1,7 +1,7 @@
 # Docker container requirements (UI only)
 
 # Gradio UI
-gradio>=4.0.0
+gradio>=4.44.0
 
 # Image/Video processing
 opencv-python-headless>=4.8.0
