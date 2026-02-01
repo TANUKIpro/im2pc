@@ -15,7 +15,8 @@ services:
       dockerfile: Dockerfile
     container_name: im2pc-ui
     env_file:
-      - .env
+      - path: .env
+        required: false
     ports:
       - "7860:7860"
     volumes:
