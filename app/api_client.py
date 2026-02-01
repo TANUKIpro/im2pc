@@ -28,6 +28,22 @@ class InferenceClient:
         self.container_data_dir = os.environ.get('DATA_DIR', '/data')
         self.host_data_dir = os.environ.get('HOST_DATA_DIR', '')
 
+    @staticmethod
+    def _check_response(response: requests.Response) -> None:
+        """Raise an error with the server's detail message if available."""
+        if response.ok:
+            return
+        detail = ""
+        try:
+            body = response.json()
+            detail = body.get("detail") or body.get("error") or ""
+        except Exception:
+            detail = response.text or ""
+        raise requests.HTTPError(
+            f"{response.status_code} {response.reason}: {detail}".strip(),
+            response=response,
+        )
+
     def _convert_path_to_host(self, container_path: str) -> str:
         """
         Convert a container-internal path to a host-side path.
@@ -50,7 +66,7 @@ class InferenceClient:
     def health_check(self) -> dict:
         """Check if the server is healthy."""
         response = requests.get(f"{self.server_url}/health", timeout=10)
-        response.raise_for_status()
+        self._check_response(response)
         return response.json()
 
     def init_video(self, video_path: str, frame_interval: int = 1) -> dict:
@@ -74,7 +90,7 @@ class InferenceClient:
             },
             timeout=120
         )
-        response.raise_for_status()
+        self._check_response(response)
         return response.json()
 
     def add_prompt(
@@ -106,7 +122,7 @@ class InferenceClient:
             },
             timeout=60
         )
-        response.raise_for_status()
+        self._check_response(response)
         return response.json()
 
     def propagate(self, save_masks: bool = True) -> dict:
@@ -124,7 +140,7 @@ class InferenceClient:
             json={"save_masks": save_masks},
             timeout=600  # Can take a while for long videos
         )
-        response.raise_for_status()
+        self._check_response(response)
         return response.json()
 
     def reconstruct(
@@ -156,7 +172,7 @@ class InferenceClient:
             },
             timeout=600
         )
-        response.raise_for_status()
+        self._check_response(response)
         return response.json()
 
     def get_frame(self, frame_idx: int) -> bytes:
@@ -165,7 +181,7 @@ class InferenceClient:
             f"{self.server_url}/frame/{frame_idx}",
             timeout=30
         )
-        response.raise_for_status()
+        self._check_response(response)
         return response.content
 
     def download_ply(self) -> bytes:
@@ -174,7 +190,7 @@ class InferenceClient:
             f"{self.server_url}/download/ply",
             timeout=60
         )
-        response.raise_for_status()
+        self._check_response(response)
         return response.content
 
 

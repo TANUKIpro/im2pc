@@ -13,7 +13,7 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
-    container_name: pi3x-ui
+    container_name: im2pc-ui
     ports:
       - "7860:7860"
     volumes:
