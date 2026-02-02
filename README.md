@@ -71,6 +71,40 @@ http://localhost:7860 を開きます。
 5. **3D再構成**: 「Run Reconstruction」ボタンでPi3X推論を実行
 6. **PLYダウンロード**: 生成された点群ファイルをダウンロード
 
+## CLI ツール（SAM2なし）
+
+SAM2を使わず、Pi3Xモデルのみで動画から直接3D点群を生成するCLIツールです。
+
+```bash
+source .venv/bin/activate
+
+python host/pi3x_cli.py <video_path> [options]
+```
+
+### 引数
+
+| 引数 | 必須 | デフォルト | 説明 |
+|------|------|-----------|------|
+| `video_path` | ○ | — | 入力動画のパス |
+| `--confidence-threshold` | — | `0.1` | 信頼度閾値 (0.0〜1.0) |
+| `--frame-interval` | — | `10` | フレーム間引き間隔 |
+| `--output-dir` | — | `data/output` | 出力ディレクトリ |
+| `--max-frames` | — | `50` | Pi3Xに入力する最大フレーム数 |
+
+### 実行例
+
+```bash
+python host/pi3x_cli.py data/IMG_1110.mp4 \
+    --confidence-threshold 0.1 \
+    --frame-interval 10 \
+    --output-dir data/output \
+    --max-frames 50
+```
+
+出力:
+- `<output-dir>/object.ply` — 3D点群
+- `<output-dir>/camera_poses.json` — カメラ姿勢列
+
 ## ディレクトリ構造
 
 ```
@@ -78,7 +112,8 @@ pi3x/
 ├── host/
 │   ├── setup.sh              # 環境セットアップスクリプト
 │   ├── requirements.txt      # ホスト側依存関係
-│   └── inference_server.py   # GPU推論APIサーバー
+│   ├── inference_server.py   # GPU推論APIサーバー
+│   └── pi3x_cli.py           # Pi3X CLIツール（SAM2なし）
 ├── app/
 │   ├── main.py               # Gradio WebUI
 │   ├── api_client.py         # 推論サーバークライアント
