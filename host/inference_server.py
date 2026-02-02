@@ -37,11 +37,36 @@ sys.path.insert(0, str(PROJECT_ROOT / "repos" / "pi3"))
 app = Flask(__name__)
 CORS(app)
 
+# SAM2 model variants
+SAM2_MODEL_CONFIGS = {
+    "tiny": {
+        "config": "configs/sam2.1/sam2.1_hiera_t.yaml",
+        "checkpoint": "sam2.1_hiera_tiny.pt",
+        "hf_model_id": "facebook/sam2.1-hiera-tiny",
+    },
+    "small": {
+        "config": "configs/sam2.1/sam2.1_hiera_s.yaml",
+        "checkpoint": "sam2.1_hiera_small.pt",
+        "hf_model_id": "facebook/sam2.1-hiera-small",
+    },
+    "base": {
+        "config": "configs/sam2.1/sam2.1_hiera_b+.yaml",
+        "checkpoint": "sam2.1_hiera_base_plus.pt",
+        "hf_model_id": "facebook/sam2.1-hiera-base-plus",
+    },
+    "large": {
+        "config": "configs/sam2.1/sam2.1_hiera_l.yaml",
+        "checkpoint": "sam2.1_hiera_large.pt",
+        "hf_model_id": "facebook/sam2.1-hiera-large",
+    },
+}
+
 # Global state
 class InferenceState:
     def __init__(self):
         self.device = None
         self.sam2_predictor = None
+        self.sam2_model_type = None  # Track which model variant is loaded
         self.sam2_state = None
         self.pi3x_model = None
         self.video_frames_dir = None
@@ -83,51 +108,66 @@ def get_device():
     return state.device
 
 
-def load_sam2_model():
-    """Load SAM2 Video Predictor if not already loaded."""
-    if state.sam2_predictor is not None:
+def load_sam2_model(model_type: str = "large"):
+    """Load SAM2 Video Predictor.
+
+    Args:
+        model_type: Model variant - "tiny", "small", "base", or "large".
+                    If the requested model differs from the currently loaded one,
+                    the old predictor is released and the new one is loaded.
+    """
+    if model_type not in SAM2_MODEL_CONFIGS:
+        raise ValueError(
+            f"Unknown SAM2 model type '{model_type}'. "
+            f"Choose from: {list(SAM2_MODEL_CONFIGS.keys())}"
+        )
+
+    # Return existing predictor if the same model type is already loaded
+    if state.sam2_predictor is not None and state.sam2_model_type == model_type:
         return state.sam2_predictor
 
-    print("Loading SAM2 Video Predictor...")
+    # Release old predictor if switching models
+    if state.sam2_predictor is not None:
+        print(f"Releasing SAM2 model ({state.sam2_model_type}) to load {model_type}...")
+        del state.sam2_predictor
+        state.sam2_predictor = None
+        state.sam2_model_type = None
+        if torch.backends.mps.is_available():
+            torch.mps.empty_cache()
+        elif torch.cuda.is_available():
+            torch.cuda.empty_cache()
+
+    config = SAM2_MODEL_CONFIGS[model_type]
+    print(f"Loading SAM2 Video Predictor ({model_type})...")
     device = get_device()
 
-    # Try local checkpoint first (prefer base_plus for balance of speed/quality)
+    # Try local checkpoint first
     sam2_dir = PROJECT_ROOT / "repos" / "sam2"
-    ckpt_path = sam2_dir / "checkpoints" / "sam2.1_hiera_base_plus.pt"
-    config_file = "configs/sam2.1/sam2.1_hiera_b+.yaml"
-
-    if not ckpt_path.exists():
-        # Try large model
-        ckpt_path = sam2_dir / "checkpoints" / "sam2.1_hiera_large.pt"
-        config_file = "configs/sam2.1/sam2.1_hiera_l.yaml"
-
-    if not ckpt_path.exists():
-        # Try small model
-        ckpt_path = sam2_dir / "checkpoints" / "sam2.1_hiera_small.pt"
-        config_file = "configs/sam2.1/sam2.1_hiera_s.yaml"
+    ckpt_path = sam2_dir / "checkpoints" / config["checkpoint"]
 
     if ckpt_path.exists():
-        # Load from local checkpoint
         try:
             from sam2.build_sam import build_sam2_video_predictor
             state.sam2_predictor = build_sam2_video_predictor(
-                config_file=config_file,
+                config_file=config["config"],
                 ckpt_path=str(ckpt_path),
                 device=str(device)
             )
-            print(f"SAM2 loaded from {ckpt_path}")
+            state.sam2_model_type = model_type
+            print(f"SAM2 ({model_type}) loaded from {ckpt_path}")
             return state.sam2_predictor
         except Exception as e:
             print(f"Failed to load local checkpoint: {e}")
 
     # Fallback to HuggingFace (auto-download)
-    print("Local checkpoint not found, loading from HuggingFace...")
+    print(f"Local checkpoint not found, loading {model_type} from HuggingFace...")
     from sam2.build_sam import build_sam2_video_predictor_hf
     state.sam2_predictor = build_sam2_video_predictor_hf(
-        model_id="facebook/sam2.1-hiera-base-plus",
+        model_id=config["hf_model_id"],
         device=str(device)
     )
-    print("SAM2 loaded from HuggingFace")
+    state.sam2_model_type = model_type
+    print(f"SAM2 ({model_type}) loaded from HuggingFace")
 
     return state.sam2_predictor
 
@@ -157,6 +197,7 @@ def health():
         "status": "ok",
         "device": str(device),
         "sam2_loaded": state.sam2_predictor is not None,
+        "sam2_model_type": state.sam2_model_type,
         "pi3x_loaded": state.pi3x_model is not None,
         "video_loaded": state.video_info is not None
     })
@@ -171,13 +212,15 @@ def init_video():
     Request body:
     {
         "video_path": "/path/to/video.mp4",
-        "frame_interval": 5  // optional, sample every N frames
+        "frame_interval": 5,  // optional, sample every N frames
+        "model_type": "large"  // optional, "tiny"/"small"/"base"/"large"
     }
     """
     try:
         data = request.json
         video_path = data.get('video_path')
         frame_interval = data.get('frame_interval', 1)
+        model_type = data.get('model_type', 'large')
 
         if not video_path or not os.path.exists(video_path):
             return jsonify({"error": f"Video not found: {video_path}"}), 400
@@ -229,7 +272,7 @@ def init_video():
         print(f"Extracted {saved_idx} frames to {state.video_frames_dir}")
 
         # Initialize SAM2 state
-        predictor = load_sam2_model()
+        predictor = load_sam2_model(model_type=model_type)
 
         with torch.inference_mode():
             state.sam2_state = predictor.init_state(

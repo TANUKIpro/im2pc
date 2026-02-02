@@ -72,13 +72,19 @@ class InferenceClient:
         self._check_response(response)
         return response.json()
 
-    def init_video(self, video_path: str, frame_interval: int = 1) -> dict:
+    def init_video(
+        self,
+        video_path: str,
+        frame_interval: int = 1,
+        model_type: str = "large",
+    ) -> dict:
         """
         Initialize video for SAM2 processing.
 
         Args:
             video_path: Path to the video file
             frame_interval: Sample every N frames
+            model_type: SAM2 model variant ("tiny", "small", "base", "large")
 
         Returns:
             dict with video_info and first_frame (base64)
@@ -89,7 +95,8 @@ class InferenceClient:
             f"{self.server_url}/sam2/init_video",
             json={
                 "video_path": host_path,
-                "frame_interval": frame_interval
+                "frame_interval": frame_interval,
+                "model_type": model_type,
             },
             timeout=120
         )
