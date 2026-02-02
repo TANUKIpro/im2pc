@@ -90,37 +90,15 @@ def sigmoid(x):
     return 1.0 / (1.0 + np.exp(-x))
 
 
-def _get_rotation(cap):
-    """動画の回転メタデータを読み取り、cv2回転コードを返す。
-
-    CAP_PROP_ORIENTATION_AUTO を無効化し、CAP_PROP_ORIENTATION_META から
-    回転角を取得して明示的に回転する。Docker/ホスト間の OpenCV ビルド差異に
-    よる自動回転の挙動差を排除するための措置。
-
-    Returns:
-        cv2.ROTATE_* 定数、または回転不要/制御不能時は None
-    """
-    auto_disabled = False
-    try:
-        auto_disabled = cap.set(cv2.CAP_PROP_ORIENTATION_AUTO, 0)
-    except Exception:
-        pass
-
-    if not auto_disabled:
-        return None
-
-    rotation_deg = 0
-    try:
-        rotation_deg = int(cap.get(cv2.CAP_PROP_ORIENTATION_META))
-    except Exception:
-        pass
-
-    rotation_map = {
-        90: cv2.ROTATE_90_COUNTERCLOCKWISE,
-        180: cv2.ROTATE_180,
-        270: cv2.ROTATE_90_CLOCKWISE,
-    }
-    return rotation_map.get(rotation_deg % 360)
+def _resize_for_preview(image: np.ndarray, max_side: int = 720) -> np.ndarray:
+    """アスペクト比を維持したままプレビュー用にリサイズする。"""
+    h, w = image.shape[:2]
+    if max(h, w) <= max_side:
+        return image
+    scale = max_side / max(h, w)
+    new_w = int(w * scale)
+    new_h = int(h * scale)
+    return cv2.resize(image, (new_w, new_h), interpolation=cv2.INTER_AREA)
 
 
 def get_device():
@@ -267,7 +245,6 @@ def init_video():
         # Extract frames using OpenCV
         print(f"Extracting frames from {video_path}...")
         cap = cv2.VideoCapture(video_path)
-        rotation_code = _get_rotation(cap)
 
         fps = cap.get(cv2.CAP_PROP_FPS)
         total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
@@ -284,8 +261,6 @@ def init_video():
                 break
 
             if frame_idx % frame_interval == 0:
-                if rotation_code is not None:
-                    frame = cv2.rotate(frame, rotation_code)
                 if actual_width is None:
                     actual_height, actual_width = frame.shape[:2]
                 frame_path = os.path.join(state.video_frames_dir, f"{saved_idx:05d}.jpg")
@@ -404,8 +379,9 @@ def add_prompt():
         overlay = frame_rgb.copy()
         overlay[mask] = overlay[mask] * 0.5 + np.array([0, 255, 0]) * 0.5
 
-        # Encode as base64
-        _, buffer = cv2.imencode('.jpg', cv2.cvtColor(overlay.astype(np.uint8), cv2.COLOR_RGB2BGR))
+        # Resize for preview and encode as base64
+        overlay_preview = _resize_for_preview(overlay.astype(np.uint8))
+        _, buffer = cv2.imencode('.jpg', cv2.cvtColor(overlay_preview, cv2.COLOR_RGB2BGR))
         overlay_b64 = base64.b64encode(buffer).decode('utf-8')
 
         return jsonify({
