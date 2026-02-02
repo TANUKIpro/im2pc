@@ -90,6 +90,39 @@ def sigmoid(x):
     return 1.0 / (1.0 + np.exp(-x))
 
 
+def _get_rotation(cap):
+    """動画の回転メタデータを読み取り、cv2回転コードを返す。
+
+    CAP_PROP_ORIENTATION_AUTO を無効化し、CAP_PROP_ORIENTATION_META から
+    回転角を取得して明示的に回転する。Docker/ホスト間の OpenCV ビルド差異に
+    よる自動回転の挙動差を排除するための措置。
+
+    Returns:
+        cv2.ROTATE_* 定数、または回転不要/制御不能時は None
+    """
+    auto_disabled = False
+    try:
+        auto_disabled = cap.set(cv2.CAP_PROP_ORIENTATION_AUTO, 0)
+    except Exception:
+        pass
+
+    if not auto_disabled:
+        return None
+
+    rotation_deg = 0
+    try:
+        rotation_deg = int(cap.get(cv2.CAP_PROP_ORIENTATION_META))
+    except Exception:
+        pass
+
+    rotation_map = {
+        90: cv2.ROTATE_90_COUNTERCLOCKWISE,
+        180: cv2.ROTATE_180,
+        270: cv2.ROTATE_90_CLOCKWISE,
+    }
+    return rotation_map.get(rotation_deg % 360)
+
+
 def get_device():
     """Determine the best available device."""
     if state.device is not None:
@@ -234,15 +267,16 @@ def init_video():
         # Extract frames using OpenCV
         print(f"Extracting frames from {video_path}...")
         cap = cv2.VideoCapture(video_path)
+        rotation_code = _get_rotation(cap)
 
         fps = cap.get(cv2.CAP_PROP_FPS)
         total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
-        width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
-        height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
 
         frame_idx = 0
         saved_idx = 0
         state.original_frames = []
+        actual_width = None
+        actual_height = None
 
         while True:
             ret, frame = cap.read()
@@ -250,12 +284,21 @@ def init_video():
                 break
 
             if frame_idx % frame_interval == 0:
+                if rotation_code is not None:
+                    frame = cv2.rotate(frame, rotation_code)
+                if actual_width is None:
+                    actual_height, actual_width = frame.shape[:2]
                 frame_path = os.path.join(state.video_frames_dir, f"{saved_idx:05d}.jpg")
                 cv2.imwrite(frame_path, frame)
                 state.original_frames.append(frame_path)
                 saved_idx += 1
 
             frame_idx += 1
+
+        # actual_width/height が取れなかった場合のフォールバック（cap.release前に取得）
+        if actual_width is None:
+            actual_width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
+            actual_height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
 
         cap.release()
 
@@ -265,8 +308,8 @@ def init_video():
             "total_frames": total_frames,
             "extracted_frames": saved_idx,
             "frame_interval": frame_interval,
-            "width": width,
-            "height": height
+            "width": actual_width,
+            "height": actual_height
         }
 
         print(f"Extracted {saved_idx} frames to {state.video_frames_dir}")

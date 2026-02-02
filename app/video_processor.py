@@ -9,6 +9,40 @@ import cv2
 import numpy as np
 
 
+def _get_rotation(cap) -> Optional[int]:
+    """動画の回転メタデータを読み取り、cv2回転コードを返す。
+
+    CAP_PROP_ORIENTATION_AUTO を無効化し、CAP_PROP_ORIENTATION_META から
+    回転角を取得して明示的に回転する。Docker/ホスト間の OpenCV ビルド差異に
+    よる自動回転の挙動差を排除するための措置。
+
+    Returns:
+        cv2.ROTATE_* 定数、または回転不要/制御不能時は None
+    """
+    auto_disabled = False
+    try:
+        auto_disabled = cap.set(cv2.CAP_PROP_ORIENTATION_AUTO, 0)
+    except Exception:
+        pass
+
+    if not auto_disabled:
+        # 自動回転を制御できない → 二重回転を避けるため手動回転しない
+        return None
+
+    rotation_deg = 0
+    try:
+        rotation_deg = int(cap.get(cv2.CAP_PROP_ORIENTATION_META))
+    except Exception:
+        pass
+
+    rotation_map = {
+        90: cv2.ROTATE_90_COUNTERCLOCKWISE,
+        180: cv2.ROTATE_180,
+        270: cv2.ROTATE_90_CLOCKWISE,
+    }
+    return rotation_map.get(rotation_deg % 360)
+
+
 def list_videos(data_dir: str = "data") -> List[str]:
     """
     List available video files in the data directory.
@@ -47,8 +81,18 @@ def get_video_info(video_path: str) -> dict:
 
     fps = cap.get(cv2.CAP_PROP_FPS)
     total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
-    width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
-    height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
+    rotation_code = _get_rotation(cap)
+
+    # 実フレームの shape から寸法を取得（CAP_PROP_FRAME_WIDTH/HEIGHT は
+    # 回転前のセンサー寸法を返す場合があるため信頼しない）
+    ret, frame = cap.read()
+    if ret:
+        if rotation_code is not None:
+            frame = cv2.rotate(frame, rotation_code)
+        height, width = frame.shape[:2]
+    else:
+        width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
+        height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
 
     cap.release()
 
@@ -74,12 +118,16 @@ def extract_first_frame(video_path: str) -> Optional[np.ndarray]:
         First frame as RGB numpy array, or None if failed
     """
     cap = cv2.VideoCapture(video_path)
+    rotation_code = _get_rotation(cap)
 
     ret, frame = cap.read()
     cap.release()
 
     if not ret:
         return None
+
+    if rotation_code is not None:
+        frame = cv2.rotate(frame, rotation_code)
 
     # Convert BGR to RGB
     frame_rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
