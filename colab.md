@@ -24,10 +24,12 @@ Google Colab 上で動画から 3D 点群を生成する手順です。
 Colab にプリインストールされている PyTorch (2.x + CUDA) をそのまま使います。`repos/pi3/requirements.txt` が `torch==2.5.1` 等を要求しますが、API 互換性があるため Colab 版で問題ありません。固定バージョンを上書きしないよう、必要なパッケージだけ個別にインストールします。
 
 ```python
-!pip install plyfile huggingface_hub safetensors einops timm
+!pip install plyfile huggingface_hub safetensors einops timm hydra-core iopath
+!cd repos/sam2 && SAM2_BUILD_CUDA=0 pip install --no-deps --no-build-isolation -e .
 ```
 
 > `pillow`, `opencv-python`, `numpy` は Colab にプリインストール済みです。
+> SAM2 は Hydra ベースのモデル構築を使用するため、`pip install -e` による正式インストールが必要です（`sys.path` 追加だけでは Hydra のクラス解決が失敗します）。`--no-deps` で PyTorch のバージョン競合を回避し、`SAM2_BUILD_CUDA=0` で CUDA 拡張ビルドをスキップします。
 
 ## 4. 動画の準備（Google Drive マウント）
 
@@ -213,7 +215,8 @@ fig.show()
 GPU ランタイム、リポジトリクローン、Google Drive マウントは上記の Pi3X のみの手順と同じです。依存パッケージに `ipympl`（インタラクティブ click 用）を追加します。
 
 ```python
-!pip install plyfile huggingface_hub safetensors einops timm ipympl
+!pip install plyfile huggingface_hub safetensors einops timm ipympl hydra-core iopath
+!cd repos/sam2 && SAM2_BUILD_CUDA=0 pip install --no-deps --no-build-isolation -e .
 ```
 
 ## セル 1: フレーム抽出

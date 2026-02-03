@@ -34,6 +34,60 @@ PROJECT_ROOT = SCRIPT_DIR.parent
 sys.path.insert(0, str(PROJECT_ROOT / "repos" / "pi3"))
 sys.path.insert(0, str(PROJECT_ROOT / "repos" / "sam2"))
 
+
+def _ensure_sam2_installed() -> None:
+    """Ensure SAM2 and its Hydra dependency are pip-installed.
+
+    SAM2 uses Hydra's instantiate() to construct models from YAML configs.
+    This requires sam2 to be a proper installed package, not just on sys.path,
+    and hydra-core + iopath to be available.
+    If not installed, performs an editable install from the submodule.
+    """
+    import subprocess
+
+    # Install hydra-core and iopath if missing (SAM2 deps not on Colab by default)
+    missing_deps = []
+    for pkg in ["hydra-core", "iopath"]:
+        try:
+            __import__(pkg.replace("-", "_").split("-")[0])
+        except ImportError:
+            missing_deps.append(pkg)
+
+    # Check hydra specifically by its actual module name
+    try:
+        import hydra  # noqa: F401
+    except ImportError:
+        if "hydra-core" not in missing_deps:
+            missing_deps.append("hydra-core")
+
+    if missing_deps:
+        print(f"Installing missing SAM2 dependencies: {missing_deps}")
+        subprocess.check_call(
+            [sys.executable, "-m", "pip", "install"] + missing_deps,
+            stdout=subprocess.DEVNULL,
+        )
+
+    # Check if SAM2 itself is installed as a package
+    sam2_repo = PROJECT_ROOT / "repos" / "sam2"
+    try:
+        from importlib.metadata import distribution
+        distribution("SAM-2")
+        return  # Already installed
+    except Exception:
+        pass
+
+    print("SAM2 not installed. Running editable install (required for Hydra)...")
+    env = {**__import__("os").environ, "SAM2_BUILD_CUDA": "0"}
+    subprocess.check_call(
+        [
+            sys.executable, "-m", "pip", "install",
+            "--no-deps", "--no-build-isolation", "-e", str(sam2_repo),
+        ],
+        stdout=subprocess.DEVNULL,
+        env=env,
+    )
+    print("SAM2 installed successfully")
+
 # SAM2 model configurations
 SAM2_MODEL_CONFIGS = {
     "tiny": {
@@ -153,6 +207,7 @@ def run_sam2_segmentation(
     Returns:
         Path to the masks directory containing PNG masks.
     """
+    _ensure_sam2_installed()
     from sam2.build_sam import build_sam2_video_predictor, build_sam2_video_predictor_hf
 
     if model_type not in SAM2_MODEL_CONFIGS:
