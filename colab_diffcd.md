@@ -21,6 +21,9 @@
 !git clone https://github.com/Linusnie/diffcd.git
 %cd diffcd
 
+# tyro CLI バグ修正: alpha=100 (int) → alpha=100.0 (float)
+!sed -i 's/alpha: float = 100/alpha: float = 100.0/' diffcd/methods.py
+
 # 依存パッケージ（JAX + CUDA 12）
 !pip install -r requirements.txt
 !pip install --upgrade "jax[cuda12_pip]==0.4.14" \
@@ -29,6 +32,8 @@
 # 点群処理用
 !pip install open3d trimesh
 ```
+
+> **重要**: `sed` コマンドで DiffCD のソースコードをパッチしています。このパッチがないと tyro CLI が型エラーで起動しません。
 
 ## 3. 点群のアップロード
 
@@ -102,12 +107,9 @@ print(f"Saved: object_points.npy ({points.shape})")
 
 ```python
 # A100 向け推奨パラメータ
-# NOTE: --method diff-cd を明示的に指定（tyro CLI の型解決エラー回避）
 !python fit_implicit.py \
     --output-dir outputs/object_mesh \
     --dataset.path ../object_points.npy \
-    --method diff-cd \
-    --method.alpha 100.0 \
     --n-batches 30000 \
     --final-mesh-points-per-axis 512
 ```
@@ -116,15 +118,11 @@ print(f"Saved: object_points.npy ({points.shape})")
 
 | パラメータ | デフォルト | A100推奨 | T4/V100 | 説明 |
 |-----------|-----------|----------|---------|------|
-| `--method` | diff-cd | diff-cd | diff-cd | メソッド指定（必須） |
-| `--method.alpha` | 100.0 | 100.0 | 100.0 | 損失関数の重み（float必須） |
 | `--batch-size` | 5000 | 5000 | 3000 | バッチあたりの点数 |
 | `--n-batches` | 40000 | 30000 | 20000 | 学習イテレーション |
 | `--final-mesh-points-per-axis` | 512 | 512 | 256 | メッシュ解像度 |
 
 > **メモリ不足時**: `--batch-size 3000` や `--final-mesh-points-per-axis 256` に下げてください。
->
-> **tyro エラー対策**: `--method diff-cd --method.alpha 100.0` は必須です。DiffCD のデフォルト値に型の問題があるため、明示的に指定する必要があります。
 
 ### 5.2 進捗確認
 
@@ -249,15 +247,24 @@ Field alpha has invalid default
 Default value 100 with type int does not match type <class 'float'>
 ```
 
-DiffCD のデフォルト値に型の問題があります。`--method diff-cd --method.alpha 100.0` を明示的に指定してください：
+DiffCD のソースコードに型の問題があります。セットアップ時の `sed` パッチがスキップされた場合、手動で修正してください：
 
 ```python
-!python fit_implicit.py \
-    --output-dir outputs/object_mesh \
-    --dataset.path ../object_points.npy \
-    --method diff-cd \
-    --method.alpha 100.0 \
-    --n-batches 30000
+# diffcd/methods.py の alpha=100 を alpha=100.0 に修正
+!sed -i 's/alpha: float = 100/alpha: float = 100.0/' diffcd/methods.py
+```
+
+または Python で直接修正：
+
+```python
+import re
+from pathlib import Path
+
+methods_file = Path("diffcd/methods.py")
+content = methods_file.read_text()
+content = re.sub(r'alpha: float = 100(?!\.)', 'alpha: float = 100.0', content)
+methods_file.write_text(content)
+print("Patched diffcd/methods.py")
 ```
 
 ### JAX CUDA エラー
