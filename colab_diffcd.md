@@ -17,17 +17,23 @@
 # GPU 確認
 !nvidia-smi
 
-# DiffCD クローン
+# 作業ディレクトリをリセット（再実行時に古いフォルダが残らないように）
+%cd /content
+!rm -rf diffcd
+
+# DiffCD クローン（常にクリーンな状態から開始）
 !git clone https://github.com/Linusnie/diffcd.git
 %cd diffcd
 
 # ===== DiffCD ソースコードパッチ =====
 # 1. tyro CLI バグ修正: alpha=100 (int) → alpha=100.0 (float)
-#    NOTE: パターンを "100," に限定して二重適用を防止
 !sed -i 's/alpha: float = 100,/alpha: float = 100.0,/' diffcd/methods.py
 
 # 2. JAX v0.6.0+ 互換性: jax.tree_map → jax.tree.map
 !find . -name "*.py" -exec sed -i 's/jax\.tree_map/jax.tree.map/g' {} +
+
+# パッチ適用確認
+!grep -n "alpha: float" diffcd/methods.py | head -1
 
 # 依存パッケージ（JAX + CUDA 12）
 !pip install -r requirements.txt
@@ -38,9 +44,7 @@
 !pip install open3d trimesh
 ```
 
-> **重要**: `sed` コマンドで DiffCD のソースコードをパッチしています：
-> - `alpha=100` → `alpha=100.0`: tyro CLI の型エラー回避
-> - `jax.tree_map` → `jax.tree.map`: JAX v0.6.0+ で削除された API の置換
+> **重要**: セットアップセルは何度でも再実行可能です。`rm -rf diffcd` で毎回クリーンな状態から開始します。
 
 ## 3. 点群のアップロード
 
