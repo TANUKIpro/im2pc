@@ -17,6 +17,10 @@ numpy>=1.24.0
 # Point cloud export
 plyfile>=1.0.0
 
+# Point cloud processing (denoising)
+scipy>=1.10.0
+scikit-learn>=1.3.0
+
 # Utilities
 tqdm>=4.65.0
 einops>=0.7.0

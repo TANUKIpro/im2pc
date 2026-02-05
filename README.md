@@ -105,6 +105,55 @@ python host/pi3x_cli.py data/IMG_1110.mp4 \
 - `<output-dir>/object.ply` — 3D点群
 - `<output-dir>/camera_poses.json` — カメラ姿勢列
 
+## ポイントクラウド ノイズ削減ツール
+
+生成した点群からノイズを除去するCLIツールです。DBSCAN（密度ベースクラスタリング）とSOR（Statistical Outlier Removal）を組み合わせて、浮遊ノイズを効果的に除去します。
+
+```bash
+source .venv/bin/activate
+
+python host/denoise_ply.py <input_ply> [options]
+```
+
+### 引数
+
+| 引数 | 必須 | デフォルト | 説明 |
+|------|------|-----------|------|
+| `input_ply` | ○ | — | 入力PLYファイルのパス |
+| `-o, --output` | — | `<input>_denoised.ply` | 出力PLYファイルのパス |
+| `--method` | — | `dbscan+sor` | ノイズ削減手法 (`dbscan`, `sor`, `dbscan+sor`) |
+| `--dbscan-eps` | — | 自動計算 | DBSCANのイプシロン距離 |
+| `--dbscan-min-points` | — | `10` | DBSCANのコア点に必要な最小点数 |
+| `--sor-neighbors` | — | `20` | SORで使用する近傍点数 |
+| `--sor-std-ratio` | — | `2.0` | SORの標準偏差倍率 |
+| `--max-dbscan-points` | — | `500000` | DBSCANダウンサンプリング閾値 |
+| `-q, --quiet` | — | — | 詳細出力を抑制 |
+
+### 実行例
+
+```bash
+# 基本使用（DBSCAN + SOR）
+python host/denoise_ply.py data/output/object.ply
+
+# 出力ファイル指定
+python host/denoise_ply.py data/output/object.ply -o data/output/clean.ply
+
+# SORのみ（高速）
+python host/denoise_ply.py data/output/object.ply --method sor
+
+# パラメータ調整（より積極的なノイズ除去）
+python host/denoise_ply.py data/output/object.ply \
+    --sor-neighbors 25 \
+    --sor-std-ratio 1.5
+```
+
+### アルゴリズム
+
+1. **DBSCAN**: 密度ベースクラスタリングで最大クラスタを抽出し、離れたノイズ塊を除去
+2. **SOR**: 各点の近傍点との平均距離を計算し、統計的外れ値を除去
+
+大規模点群（50万点超）では、DBSCANの前にボクセルダウンサンプリングを自動適用してメモリ効率を改善します。
+
 ## ディレクトリ構造
 
 ```
@@ -113,7 +162,8 @@ pi3x/
 │   ├── setup.sh              # 環境セットアップスクリプト
 │   ├── requirements.txt      # ホスト側依存関係
 │   ├── inference_server.py   # GPU推論APIサーバー
-│   └── pi3x_cli.py           # Pi3X CLIツール（SAM2なし）
+│   ├── pi3x_cli.py           # Pi3X CLIツール（SAM2なし）
+│   └── denoise_ply.py        # ポイントクラウドノイズ削減ツール
 ├── app/
 │   ├── main.py               # Gradio WebUI
 │   ├── api_client.py         # 推論サーバークライアント
@@ -128,7 +178,8 @@ pi3x/
 ├── data/
 │   ├── IMG_1110.mp4          # 入力動画
 │   └── output/               # 出力PLY
-│       ├── object.ply
+│       ├── object.ply        # 生成された点群
+│       ├── object_denoised.ply # ノイズ削減後の点群
 │       ├── camera_poses.json
 │       └── masks/
 └── .venv/                    # Python仮想環境
