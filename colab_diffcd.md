@@ -102,9 +102,12 @@ print(f"Saved: object_points.npy ({points.shape})")
 
 ```python
 # A100 向け推奨パラメータ
+# NOTE: --method diff-cd を明示的に指定（tyro CLI の型解決エラー回避）
 !python fit_implicit.py \
     --output-dir outputs/object_mesh \
     --dataset.path ../object_points.npy \
+    --method diff-cd \
+    --method.alpha 100.0 \
     --n-batches 30000 \
     --final-mesh-points-per-axis 512
 ```
@@ -113,11 +116,15 @@ print(f"Saved: object_points.npy ({points.shape})")
 
 | パラメータ | デフォルト | A100推奨 | T4/V100 | 説明 |
 |-----------|-----------|----------|---------|------|
+| `--method` | diff-cd | diff-cd | diff-cd | メソッド指定（必須） |
+| `--method.alpha` | 100.0 | 100.0 | 100.0 | 損失関数の重み（float必須） |
 | `--batch-size` | 5000 | 5000 | 3000 | バッチあたりの点数 |
 | `--n-batches` | 40000 | 30000 | 20000 | 学習イテレーション |
 | `--final-mesh-points-per-axis` | 512 | 512 | 256 | メッシュ解像度 |
 
 > **メモリ不足時**: `--batch-size 3000` や `--final-mesh-points-per-axis 256` に下げてください。
+>
+> **tyro エラー対策**: `--method diff-cd --method.alpha 100.0` は必須です。DiffCD のデフォルト値に型の問題があるため、明示的に指定する必要があります。
 
 ### 5.2 進捗確認
 
@@ -234,6 +241,24 @@ files.download("object_mesh_final.ply")
 ```
 
 ## トラブルシューティング
+
+### tyro CLI エラー（Invalid input / alpha has invalid default）
+
+```
+Field alpha has invalid default
+Default value 100 with type int does not match type <class 'float'>
+```
+
+DiffCD のデフォルト値に型の問題があります。`--method diff-cd --method.alpha 100.0` を明示的に指定してください：
+
+```python
+!python fit_implicit.py \
+    --output-dir outputs/object_mesh \
+    --dataset.path ../object_points.npy \
+    --method diff-cd \
+    --method.alpha 100.0 \
+    --n-batches 30000
+```
 
 ### JAX CUDA エラー
 
