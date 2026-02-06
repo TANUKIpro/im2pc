@@ -27,13 +27,13 @@
 
 # ===== DiffCD ソースコードパッチ =====
 # 1. tyro CLI バグ修正: alpha=100 (int) → alpha=100.0 (float)
-!sed -i 's/alpha: float = 100,/alpha: float = 100.0,/' diffcd/methods.py
+!sed -i 's/alpha: float = 100$/alpha: float = 100.0/' diffcd/methods.py
 
 # 2. JAX v0.6.0+ 互換性: jax.tree_map → jax.tree.map
 !find . -name "*.py" -exec sed -i 's/jax\.tree_map/jax.tree.map/g' {} +
 
-# パッチ適用確認
-!grep -n "alpha: float" diffcd/methods.py | head -1
+# パッチ適用確認（100.0 になっていれば成功）
+!grep "alpha: float = 100" diffcd/methods.py && echo "✗ Patch failed - still int" || echo "✓ Patch applied successfully"
 
 # 依存パッケージ（JAX + CUDA 12）
 !pip install -r requirements.txt
@@ -261,11 +261,11 @@ Default value 100 with type int does not match type <class 'float'>
 DiffCD のソースコードに型の問題があります。セットアップ時の `sed` パッチがスキップされた場合、手動で修正してください：
 
 ```python
-# diffcd/methods.py の alpha=100, を alpha=100.0, に修正
-!sed -i 's/alpha: float = 100,/alpha: float = 100.0,/' diffcd/methods.py
+# diffcd/methods.py の alpha=100 を alpha=100.0 に修正
+!sed -i 's/alpha: float = 100$/alpha: float = 100.0/' diffcd/methods.py
 ```
 
-> **注意**: パターンを `100,`（カンマ付き）に限定することで、既に `100.0` の場合に二重適用されることを防ぎます。
+> **注意**: パターンに `$`（行末アンカー）を使用することで、既に `100.0` の場合は二重適用されません。
 
 ### JAX API エラー（jax.tree_map was removed）
 
