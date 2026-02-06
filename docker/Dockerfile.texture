@@ -1,0 +1,31 @@
+# Texture baking environment
+# Includes xatlas for UV atlas generation + OpenCV/NumPy for projection
+#
+# Build:  docker build -f docker/Dockerfile.texture -t im2pc-texture .
+# Run:    docker run --rm -v $(pwd):/app -w /app im2pc-texture \
+#           python host/texture_mesh.py \
+#             --mesh /app/data/mesh/object_mesh_final.ply \
+#             --intrinsics /app/data/output_sam2/intrinsics.json \
+#             --poses /app/data/output_sam2/camera_poses.json \
+#             --frames-dir /app/data/output_sam2/frames \
+#             --masks-dir /app/data/output_sam2/masks \
+#             --output-dir /app/data/output_textured
+
+FROM python:3.11-slim-bookworm
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    libgl1-mesa-glx \
+    libglib2.0-0 \
+    g++ \
+    cmake \
+    && rm -rf /var/lib/apt/lists/*
+
+RUN pip install --no-cache-dir \
+    numpy \
+    opencv-python-headless \
+    plyfile \
+    scipy \
+    xatlas \
+    trimesh
+
+WORKDIR /app
