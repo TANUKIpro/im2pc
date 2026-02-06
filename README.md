@@ -154,34 +154,105 @@ python host/denoise_ply.py data/output/object.ply \
 
 大規模点群（50万点超）では、DBSCANの前にボクセルダウンサンプリングを自動適用してメモリ効率を改善します。
 
+## テクスチャベイキング
+
+メッシュ（geometry only PLY）に、多視点画像のテクスチャを焼き付けるパイプラインです。
+
+```
+カメラ内部パラメータ推定          テクスチャ焼付
+━━━━━━━━━━━━━━━━━━━           ━━━━━━━━━━━━━━━━━━━━━━━━━
+Point Cloud (RGB)  ─┐           Mesh (.ply) ──→ xatlas UV生成
+Camera Poses       ─┤→ K推定     Intrinsics K ──→ 多視点投影
+Frames (JPEG)      ─┤           Camera Poses ──→   ↓
+Masks (PNG)        ─┘           Frames+Masks ──→ 色サンプリング
+     ↓                                             ↓
+intrinsics.json                 OBJ + MTL + texture.png
+```
+
+### 入出力
+
+| 入力 | 形式 | 説明 |
+|------|------|------|
+| メッシュ | PLY (頂点+面) | DiffCD等で生成したgeometry only mesh |
+| カメラポーズ | JSON (4x4行列) | Pi3X出力のcam-to-world行列 |
+| フレーム画像 | JPEG (連番) | 撮影画像 |
+| SAM2マスク | PNG (2値) | 対象物領域マスク |
+| 点群 | PLY (RGB付) | intrinsics推定に使用 |
+
+| 出力 | 形式 | 説明 |
+|------|------|------|
+| `intrinsics.json` | JSON | 推定カメラ内部パラメータ (fx, fy, cx, cy) |
+| `textured_mesh.obj` | OBJ | UV付きメッシュ |
+| `textured_mesh.mtl` | MTL | マテリアル定義 |
+| `texture.png` | PNG (2048²) | 焼付済みテクスチャ画像 |
+
+### 実行手順
+
+```bash
+# Step 1: カメラ内部パラメータ推定（ホスト環境）
+python host/extract_intrinsics.py \
+    --point-cloud data/output_sam2/object.ply \
+    --poses data/output_sam2/camera_poses.json \
+    --frames-dir data/output_sam2/frames \
+    --masks-dir data/output_sam2/masks \
+    --output data/output_sam2/intrinsics.json \
+    --visualize
+
+# Step 2: Dockerイメージのビルド
+docker build -f docker/Dockerfile.texture -t im2pc-texture .
+
+# Step 3: テクスチャ焼付（Docker環境）
+docker run --rm -v $(pwd):/app -w /app im2pc-texture \
+    python -u host/texture_mesh.py \
+        --mesh /app/data/mesh/object_mesh_final.ply \
+        --intrinsics /app/data/output_sam2/intrinsics.json \
+        --poses /app/data/output_sam2/camera_poses.json \
+        --frames-dir /app/data/output_sam2/frames \
+        --masks-dir /app/data/output_sam2/masks \
+        --output-dir /app/data/output_textured
+```
+
+> 詳細は [doc/texture_pipeline.md](doc/texture_pipeline.md) を参照してください。
+
 ## ディレクトリ構造
 
 ```
-pi3x/
+im2pc/
 ├── host/
 │   ├── setup.sh              # 環境セットアップスクリプト
 │   ├── requirements.txt      # ホスト側依存関係
 │   ├── inference_server.py   # GPU推論APIサーバー
 │   ├── pi3x_cli.py           # Pi3X CLIツール（SAM2なし）
-│   └── denoise_ply.py        # ポイントクラウドノイズ削減ツール
+│   ├── pi3x_sam2_cli.py      # SAM2+Pi3X フルパイプライン CLI
+│   ├── denoise_ply.py        # ポイントクラウドノイズ削減ツール
+│   ├── extract_intrinsics.py # カメラ内部パラメータ推定
+│   └── texture_mesh.py       # テクスチャベイキング
 ├── app/
 │   ├── main.py               # Gradio WebUI
 │   ├── api_client.py         # 推論サーバークライアント
 │   └── video_processor.py    # フレーム処理ユーティリティ
 ├── docker/
 │   ├── Dockerfile            # UIコンテナ定義
+│   ├── Dockerfile.texture    # テクスチャベイキング用コンテナ
 │   ├── docker-compose.yml    # サービス構成
 │   └── requirements.txt      # コンテナ側依存関係
+├── doc/
+│   └── texture_pipeline.md   # テクスチャパイプライン詳細設計
 ├── repos/                    # 外部リポジトリ（自動クローン）
 │   ├── sam2/
 │   └── pi3/
 ├── data/
-│   ├── IMG_1110.mp4          # 入力動画
-│   └── output/               # 出力PLY
-│       ├── object.ply        # 生成された点群
-│       ├── object_denoised.ply # ノイズ削減後の点群
-│       ├── camera_poses.json
-│       └── masks/
+│   ├── mesh/                 # メッシュデータ
+│   ├── output_sam2/          # SAM2+Pi3X出力
+│   │   ├── frames/           # 抽出フレーム
+│   │   ├── masks/            # SAM2マスク
+│   │   ├── camera_poses.json # カメラ姿勢
+│   │   ├── object.ply        # 色付き点群
+│   │   └── intrinsics.json   # 推定カメラ内部パラメータ
+│   └── output_textured/      # テクスチャ出力
+│       ├── textured_mesh.obj
+│       ├── textured_mesh.mtl
+│       └── texture.png
 └── .venv/                    # Python仮想環境
 ```
 
